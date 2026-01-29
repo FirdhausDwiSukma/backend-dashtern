@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"backend-dashboard/internal/domain"
-	"errors"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -24,13 +23,14 @@ func NewLoginUsecase(userRepo domain.UserRepository, jwtSecret string) domain.Us
 func (u *loginUsecase) Login(username, password string) (string, error) {
 	user, err := u.userRepo.GetByUsername(username)
 	if err != nil {
-		return "", errors.New("invalid credentials") // Don't reveal if user exists or not for security
+		// Return the error directly (it could be ErrUserNotFound or DB error)
+		return "", err
 	}
 
 	// Compare password
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	if err != nil {
-		return "", errors.New("invalid credentials")
+		return "", domain.ErrInvalidPassword
 	}
 
 	// Generate JWT

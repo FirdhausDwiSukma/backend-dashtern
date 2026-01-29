@@ -11,11 +11,10 @@ type UserHandler struct {
 	UserUsecase domain.UserUsecase
 }
 
-func NewUserHandler(r *gin.Engine, us domain.UserUsecase) {
-	handler := &UserHandler{
+func NewUserHandler(r *gin.Engine, us domain.UserUsecase) *UserHandler {
+	return &UserHandler{
 		UserUsecase: us,
 	}
-	r.POST("/login", handler.Login)
 }
 
 type loginRequest struct {
@@ -32,6 +31,14 @@ func (h *UserHandler) Login(c *gin.Context) {
 
 	token, err := h.UserUsecase.Login(req.Username, req.Password)
 	if err != nil {
+		if err == domain.ErrUserNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "USER_NOT_FOUND"})
+			return
+		}
+		if err == domain.ErrInvalidPassword {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "INVALID_PASSWORD"})
+			return
+		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}

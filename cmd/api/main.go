@@ -3,13 +3,16 @@ package main
 import (
 	"backend-dashboard/internal/config"
 	"backend-dashboard/internal/delivery/http"
+	"backend-dashboard/internal/delivery/http/middleware"
 	"backend-dashboard/internal/repository"
 	"backend-dashboard/internal/usecase"
 	"backend-dashboard/pkg/database"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/time/rate"
 )
 
 func main() {
@@ -32,7 +35,7 @@ func main() {
 
 	// 5. Setup Router
 	r := gin.Default()
-	
+
 	// CORS Middleware (Simple version for development)
 	r.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
@@ -47,7 +50,16 @@ func main() {
 		c.Next()
 	})
 
-	http.NewUserHandler(r, loginUsecase)
+	// Rate Limit: 5 requests every 1 minute
+	// rate.Every(1 * time.Minute / 5) = 1 token every 12 seconds
+	// Burst 5 = allow 5 requests immediately
+	loginRateLimiter := middleware.RateLimitMiddleware(rate.Every(1*time.Minute/5), 5)
+
+	// User Handler
+	userHandler := http.NewUserHandler(r, loginUsecase)
+
+	// Apply middleware only to login
+	r.POST("/login", loginRateLimiter, userHandler.Login)
 
 	// 6. Run Server
 	serverAddr := fmt.Sprintf(":%s", cfg.AppPort)
