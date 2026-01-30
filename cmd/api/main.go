@@ -27,11 +27,13 @@ func main() {
 
 	// 3. Migration & Seeding
 	database.AutoMigrate(db)
+	database.SeedRoles(db)
 	database.SeedSuperAdmin(db)
+	database.SeedSampleData(db)
 
 	// 4. Init Layers
 	userRepo := repository.NewPostgresUserRepository(db)
-	loginUsecase := usecase.NewLoginUsecase(userRepo, cfg.JWTSecret)
+	userUsecase := usecase.NewUserUsecase(userRepo, cfg.JWTSecret)
 
 	// 5. Setup Router
 	r := gin.Default()
@@ -56,10 +58,24 @@ func main() {
 	loginRateLimiter := middleware.RateLimitMiddleware(rate.Every(1*time.Minute/5), 5)
 
 	// User Handler
-	userHandler := http.NewUserHandler(r, loginUsecase)
+	userHandler := http.NewUserHandler(r, userUsecase)
 
-	// Apply middleware only to login
+	// Public routes
 	r.POST("/login", loginRateLimiter, userHandler.Login)
+
+	// API routes (in production, these should be protected with JWT middleware)
+	api := r.Group("/api")
+	{
+		// User management
+		api.GET("/users", userHandler.GetUsers)
+		api.GET("/users/:id", userHandler.GetUser)
+		api.POST("/users", userHandler.CreateUser)
+		api.PUT("/users/:id", userHandler.UpdateUser)
+		api.DELETE("/users/:id", userHandler.DeactivateUser)
+
+		// Hard delete - only for super_admin (TODO: protect with JWT middleware)
+		api.DELETE("/users/:id/permanent", userHandler.HardDeleteUser)
+	}
 
 	// 6. Run Server
 	serverAddr := fmt.Sprintf(":%s", cfg.AppPort)
