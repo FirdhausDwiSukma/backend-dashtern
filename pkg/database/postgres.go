@@ -197,17 +197,18 @@ func SeedSampleData(db *gorm.DB) {
 
 	// Create Intern users
 	interns := []struct {
-		fullName  string
-		username  string
-		email     string
-		pic       domain.User
-		batch     string
-		division  string
-		education string
+		fullName   string
+		username   string
+		email      string
+		pic        domain.User
+		batch      string
+		division   string
+		university string
+		major      string
 	}{
-		{"Bob Johnson", "intern_bob", "bob@example.com", pic1, "2026-01", "Engineering", "Computer Science"},
-		{"Charlie Brown", "intern_charlie", "charlie@example.com", pic1, "2026-01", "Engineering", "Software Engineering"},
-		{"Diana Prince", "intern_diana", "diana@example.com", pic2, "2026-01", "Design", "Graphic Design"},
+		{"Bob Johnson", "intern_bob", "bob@example.com", pic1, "2026-01", "Engineering", "Universitas Indonesia", "Computer Science"},
+		{"Charlie Brown", "intern_charlie", "charlie@example.com", pic1, "2026-01", "Engineering", "Institut Teknologi Bandung", "Software Engineering"},
+		{"Diana Prince", "intern_diana", "diana@example.com", pic2, "2026-01", "Design", "Universitas Gadjah Mada", "Graphic Design"},
 	}
 
 	for _, intern := range interns {
@@ -224,14 +225,15 @@ func SeedSampleData(db *gorm.DB) {
 		db.Create(&user)
 
 		profile := domain.InternProfile{
-			UserID:    user.ID,
-			PICID:     intern.pic.ID,
-			Batch:     intern.batch,
-			Division:  intern.division,
-			StartDate: now.AddDate(0, -1, 0), // Started 1 month ago
-			EndDate:   now.AddDate(0, 2, 0),  // Ends in 2 months
-			Education: intern.education,
-			CreatedAt: now,
+			UserID:     user.ID,
+			PICID:      intern.pic.ID,
+			Batch:      intern.batch,
+			Division:   intern.division,
+			StartDate:  now.AddDate(0, -1, 0), // Started 1 month ago
+			EndDate:    now.AddDate(0, 2, 0),  // Ends in 2 months
+			University: intern.university,
+			Major:      intern.major,
+			CreatedAt:  now,
 		}
 		db.Create(&profile)
 	}

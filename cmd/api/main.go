@@ -35,6 +35,9 @@ func main() {
 	userRepo := repository.NewPostgresUserRepository(db)
 	userUsecase := usecase.NewUserUsecase(userRepo, cfg.JWTSecret)
 
+	internRepo := repository.NewInternRepository(db)
+	internUsecase := usecase.NewInternUsecase(internRepo, userRepo)
+
 	// 5. Setup Router
 	r := gin.Default()
 
@@ -43,7 +46,7 @@ func main() {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
 
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
@@ -57,24 +60,54 @@ func main() {
 	// Burst 5 = allow 5 requests immediately
 	loginRateLimiter := middleware.RateLimitMiddleware(rate.Every(1*time.Minute/5), 5)
 
-	// User Handler
+	// Middlewares
+	authMiddleware := middleware.AuthMiddleware(cfg.JWTSecret)
+	superAdminOnly := middleware.RoleMiddleware(1) // role_id 1 = super_admin
+	hrOrAbove := middleware.RoleMiddleware(1, 2)   // role_id 1,2 = super_admin, hr
+	// picOrAbove := middleware.RoleMiddleware(1, 2, 3)   // role_id 1,2,3 = super_admin, hr, pic (for future use)
+
+	// Handlers
 	userHandler := http.NewUserHandler(r, userUsecase)
+	internHandler := http.NewInternHandler(internUsecase)
+	profileHandler := http.NewProfileHandler(userUsecase)
 
 	// Public routes
 	r.POST("/login", loginRateLimiter, userHandler.Login)
 
-	// API routes (in production, these should be protected with JWT middleware)
+	// Protected API routes
 	api := r.Group("/api")
+	api.Use(authMiddleware) // All API routes require authentication
 	{
-		// User management
-		api.GET("/users", userHandler.GetUsers)
-		api.GET("/users/:id", userHandler.GetUser)
-		api.POST("/users", userHandler.CreateUser)
-		api.PUT("/users/:id", userHandler.UpdateUser)
-		api.DELETE("/users/:id", userHandler.DeactivateUser)
+		// User management (HR or above)
+		users := api.Group("/users")
+		users.Use(hrOrAbove)
+		{
+			users.GET("", userHandler.GetUsers)
+			users.GET("/:id", userHandler.GetUser)
+			users.POST("", userHandler.CreateUser)
+			users.PUT("/:id", userHandler.UpdateUser)
+			users.DELETE("/:id", userHandler.DeactivateUser)
 
-		// Hard delete - only for super_admin (TODO: protect with JWT middleware)
-		api.DELETE("/users/:id/permanent", userHandler.HardDeleteUser)
+			// Hard delete - only for super_admin
+			users.DELETE("/:id/permanent", superAdminOnly, userHandler.HardDeleteUser)
+		}
+
+		// Intern management (HR or above can create, all authenticated users can view)
+		interns := api.Group("/interns")
+		{
+			interns.POST("", hrOrAbove, internHandler.CreateIntern)
+			interns.GET("", internHandler.GetInterns)
+			interns.GET("/:id", internHandler.GetIntern)
+		}
+
+		// Profile management (all authenticated users)
+		profile := api.Group("/profile")
+		{
+			profile.GET("", profileHandler.GetProfile)
+			profile.PUT("", profileHandler.UpdateProfile)
+			profile.PUT("/password", profileHandler.UpdatePassword)
+			profile.POST("/avatar", profileHandler.UpdateAvatar)
+		}
 	}
 
 	// 6. Run Server
